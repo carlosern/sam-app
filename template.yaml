@@ -12,6 +12,9 @@ Description: >-
 Transform:
   - AWS::Serverless-2016-10-31
 
+Conditions:
+  IsProduction: !Equals [!Ref "AWS::StackName", "sam-app-prod"]
+
 # Resources declares the AWS resources that you want to include in the stack
 # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/resources-section-structure.html
 Resources:
@@ -45,7 +48,8 @@ Resources:
             Method: GET
       AutoPublishAlias: live
       DeploymentPreference:
-        Type: Canary10Percent5Minutes
+        Type: !If [IsProduction, "Canary10Percent5Minutes", "AllAtOnce"]
+        Alarms: !If [IsProduction, [!Ref CanaryErrorsAlarm], []]
 
   # Each Lambda function is defined by properties:
   # https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
@@ -104,24 +108,24 @@ Resources:
             Path: /
             Method: POST
 
-CanaryErrorsAlarm:
-  Type: AWS::CloudWatch::Alarm
-  Properties:
-    AlarmDescription: Lambda function canary errors getAllItemsFunction
-    ComparisonOperator: GreaterThanThreshold
-    EvaluationPeriods: 2
-    MetricName: Errors
-    Namespace: AWS/Lambda
-    Period: 60
-    Statistic: Sum
-    Threshold: 0
-    Dimensions:
-      - Name: Resource
-        Value: !Sub "${getAllItemsFunction}:live"
-      - Name: FunctionName
-        Value: !Ref getAllItemsFunction
-      - Name: ExecutedVersion
-        Value: !GetAtt getAllItemsFunction.Version.Version
+  CanaryErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Lambda function canary errors getAllItemsFunction
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      Dimensions:
+        - Name: Resource
+          Value: !Sub "${getAllItemsFunction}:live"
+        - Name: FunctionName
+          Value: !Ref getAllItemsFunction
+        - Name: ExecutedVersion
+          Value: !GetAtt getAllItemsFunction.Version.Version
 
   # Simple syntax to create a DynamoDB table with a single attribute primary key, more in
   # https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlesssimpletable
